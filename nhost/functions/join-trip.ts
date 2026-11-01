@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { handleCors } from '../lib/http.js';
 
 export default async function joinTrip(req: Request, res: Response) {
+  if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
   const userId = readUserId(token);

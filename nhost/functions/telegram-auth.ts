@@ -1,9 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { handleCors } from '../lib/http.js';
 
 type TelegramUser = { id: number; first_name?: string; last_name?: string; username?: string };
 
 export default function telegramAuth(req: Request, res: Response) {
+  if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const initData = String(req.body?.initData ?? '');
   const botToken = process.env.TELEGRAM_BOT_TOKEN;

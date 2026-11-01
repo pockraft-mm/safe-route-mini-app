@@ -16,13 +16,28 @@ export async function authenticateTelegram(): Promise<User> {
     throw new Error('Open this app from Telegram to sign in. A regular browser session has no Telegram identity, so Nhost will reject trip mutations.');
   }
 
-  const response = await fetch(`${functionsUrl}/telegram-auth`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ initData: webApp.initData }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${functionsUrl}/telegram-auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ initData: webApp.initData }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    console.error('[SafeRoute auth] Endpoint unreachable or browser blocked the request', { endpoint: `${functionsUrl}/telegram-auth` });
+    throw new Error('Cannot connect to the sign-in service. Check your connection and try again. If this continues, the Nhost function or its browser access settings need attention.');
+  }
 
-  if (!response.ok) throw new Error('Telegram authentication failed.');
+  if (!response.ok) {
+    console.error('[SafeRoute auth] Sign-in request failed', { status: response.status });
+    if (response.status === 404) throw new Error('The sign-in service is not deployed at the configured address. Check the Nhost telegram-auth function.');
+    if (response.status >= 500) throw new Error('The sign-in service is unavailable. Check the Nhost function logs and server configuration.');
+    throw new Error(`Telegram sign-in was rejected (HTTP ${response.status}). Close and reopen the Mini App to try again.`);
+  }
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('The sign-in service returned an unexpected response. Check the Nhost Functions URL.');
+  }
   const result = (await response.json()) as { token: string; user: User };
   sessionStorage.setItem('safe-route-token', result.token);
   return result.user;

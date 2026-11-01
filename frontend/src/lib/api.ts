@@ -1,9 +1,9 @@
 import type { GraphQLResponse, Trip, User } from '../types';
 
 const graphqlUrl = import.meta.env.VITE_NHOST_GRAPHQL_URL;
-const functionsUrl = import.meta.env.VITE_NHOST_FUNCTIONS_URL;
+const functionsUrl = '/api';
 
-export const isDemoMode = !graphqlUrl || !functionsUrl;
+export const isDemoMode = !graphqlUrl;
 
 export async function authenticateTelegram(): Promise<User> {
   const webApp = window.Telegram?.WebApp;
@@ -26,29 +26,38 @@ export async function authenticateTelegram(): Promise<User> {
     });
   } catch {
     console.error('[SafeRoute auth] Endpoint unreachable or browser blocked the request', { endpoint: `${functionsUrl}/telegram-auth` });
-    throw new Error('Cannot connect to the sign-in service. Check your connection and try again. If this continues, the Nhost function or its browser access settings need attention.');
+    throw new Error('Cannot connect to the sign-in service. Check your connection and try again. If this continues, check the Vercel API deployment.');
   }
 
   if (!response.ok) {
     console.error('[SafeRoute auth] Sign-in request failed', { status: response.status });
-    if (response.status === 404) throw new Error('The sign-in service is not deployed at the configured address. Check the Nhost telegram-auth function.');
+    if (response.status === 404) throw new Error('The sign-in API is missing. Deploy the frontend project with its api directory to Vercel.');
     if (response.status >= 500) {
       const detail = await response.json().catch(() => null) as { code?: string; issues?: unknown } | null;
       if (detail?.code === 'AUTH_CONFIG_INVALID' && Array.isArray(detail.issues)) {
         const descriptions: Record<string, string> = {
-          BOT_TOKEN_MISSING: 'TELEGRAM_BOT_TOKEN is missing from the Nhost function environment.',
-          JWT_SECRET_MISSING: 'NHOST_JWT_SECRET is missing from the Nhost function environment.',
+          BOT_TOKEN_MISSING: 'TELEGRAM_BOT_TOKEN is missing from the Vercel server environment.',
+          JWT_SECRET_MISSING: 'NHOST_JWT_SECRET is missing from the Vercel server environment.',
           JWT_CONFIG_UNSUPPORTED: 'The Nhost JWT configuration could not be loaded. Use an HS256 key or an RS256 signingKey containing a valid RSA private key.',
+          JWT_SECRET_REFERENCE_UNRESOLVED: 'Vercel received a Nhost secret reference instead of its value. Replace the reference with the actual value in NHOST_JWT_SECRET.',
+          JWT_CONFIG_JSON_INVALID: 'NHOST_JWT_SECRET must contain valid JSON with the complete signing configuration.',
+          JWT_CONFIG_INVALID: 'NHOST_JWT_SECRET must contain a single JWT configuration object.',
+          JWT_HMAC_KEY_MISSING: 'The HS256 configuration is missing its key.',
+          JWT_PRIVATE_KEY_MISSING: 'The RS256 configuration is missing signingKey. Copy the existing private signing key from Nhost.',
+          JWT_PRIVATE_KEY_INVALID: 'signingKey could not be read as an RSA private key. Copy the full existing key, including its BEGIN and END lines.',
+          JWT_PUBLIC_KEY_INVALID: 'The key field could not be read as an RSA public key. Check the copied Nhost configuration.',
+          JWT_KEY_PAIR_MISMATCH: 'The copied public key and signingKey do not belong to the same RSA key pair. Copy both from the same Nhost configuration.',
+          JWT_ALGORITHM_UNSUPPORTED: 'The JWT type must be HS256 or RS256 for this sign-in service.',
         };
         const messages = detail.issues.filter((issue): issue is string => typeof issue === 'string').map((issue) => descriptions[issue]).filter(Boolean);
         if (messages.length) throw new Error(messages.join(' '));
       }
     }
-    if (response.status >= 500) throw new Error('The sign-in service is unavailable. Check the Nhost function logs and server configuration.');
+    if (response.status >= 500) throw new Error('The sign-in service is unavailable. Check the Vercel function logs and server configuration.');
     throw new Error(`Telegram sign-in was rejected (HTTP ${response.status}). Close and reopen the Mini App to try again.`);
   }
   if (!response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error('The sign-in service returned an unexpected response. Check the Nhost Functions URL.');
+    throw new Error('The sign-in API returned an unexpected response. Check that /api/telegram-auth is deployed as a Vercel function.');
   }
   const result = (await response.json()) as { token: string; user: User };
   sessionStorage.setItem('safe-route-token', result.token);

@@ -2,7 +2,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_NHOST_GRAPHQL_URL?: string;
-  readonly VITE_NHOST_FUNCTIONS_URL?: string;
   readonly VITE_MAP_STYLE_URL?: string;
 }
 

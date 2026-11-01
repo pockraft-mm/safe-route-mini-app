@@ -16,7 +16,7 @@ export default async function joinTrip(req: Request, res: Response) {
   if (!trip) return res.status(404).json({ error: 'Invite code not found.' });
   const members = await request<{ trip_members: Array<{ user_id: string; display_name: string; joined_at: string }> }>(graphqlUrl, adminSecret, `query Members($tripId: uuid!) { trip_members(where: {trip_id: {_eq: $tripId}}) { user_id display_name joined_at } }`, { tripId: trip.id });
   if (members.trip_members.some((member) => member.user_id === userId)) return res.status(409).json({ error: 'You already joined this trip.' });
-  if (members.trip_members.length >= 2) return res.status(409).json({ error: 'This trip already has two people.' });
+  if (members.trip_members.length >= 4) return res.status(409).json({ error: 'This trip already has three watchers.' });
   await request(graphqlUrl, adminSecret, `mutation Join($tripId: uuid!, $userId: String!, $name: String!) { insert_trip_members_one(object: {trip_id: $tripId, user_id: $userId, display_name: $name}) { id } }`, { tripId: trip.id, userId, name: userId.replace('telegram:', 'Telegram ') });
   return res.json({ trip: { id: trip.id, inviteCode: trip.invite_code, status: trip.status, deadlineAt: trip.deadline_at, createdAt: trip.created_at, ownerId: trip.owner_id, members: [...members.trip_members, { user_id: userId, display_name: userId.replace('telegram:', 'Telegram '), joined_at: new Date().toISOString() }].map((member) => ({ userId: member.user_id, displayName: member.display_name, joinedAt: member.joined_at })), locations: [] } });
 }

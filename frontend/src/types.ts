@@ -21,6 +21,9 @@ export type Trip = {
   deadlineAt: string;
   createdAt: string;
   ownerId: string;
+  startLatitude?: number | null;
+  startLongitude?: number | null;
+  destination?: string | null;
   members: Array<{ userId: string; displayName: string; joinedAt: string }>;
   locations: LocationPoint[];
 };

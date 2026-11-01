@@ -23,7 +23,7 @@ export function MapPanel({ locations }: { locations: LocationPoint[] }) {
     const bounds = new maplibregl.LngLatBounds();
     locations.forEach((point) => {
       bounds.extend([point.longitude, point.latitude]);
-      new maplibregl.Marker({ color: '#43e6a3' }).setLngLat([point.longitude, point.latitude]).addTo(map.current!);
+      new maplibregl.Marker({ color: '#a78bfa' }).setLngLat([point.longitude, point.latitude]).addTo(map.current!);
     });
     map.current.fitBounds(bounds, { padding: 48, maxZoom: 15 });
   }, [locations]);

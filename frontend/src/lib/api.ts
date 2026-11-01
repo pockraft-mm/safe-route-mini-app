@@ -32,6 +32,18 @@ export async function authenticateTelegram(): Promise<User> {
   if (!response.ok) {
     console.error('[SafeRoute auth] Sign-in request failed', { status: response.status });
     if (response.status === 404) throw new Error('The sign-in service is not deployed at the configured address. Check the Nhost telegram-auth function.');
+    if (response.status >= 500) {
+      const detail = await response.json().catch(() => null) as { code?: string; issues?: unknown } | null;
+      if (detail?.code === 'AUTH_CONFIG_INVALID' && Array.isArray(detail.issues)) {
+        const descriptions: Record<string, string> = {
+          BOT_TOKEN_MISSING: 'TELEGRAM_BOT_TOKEN is missing from the Nhost function environment.',
+          JWT_SECRET_MISSING: 'NHOST_JWT_SECRET is missing from the Nhost function environment.',
+          JWT_CONFIG_UNSUPPORTED: 'The Nhost JWT configuration is not supported by this sign-in service; it currently requires an HS256 signing key.',
+        };
+        const messages = detail.issues.filter((issue): issue is string => typeof issue === 'string').map((issue) => descriptions[issue]).filter(Boolean);
+        if (messages.length) throw new Error(messages.join(' '));
+      }
+    }
     if (response.status >= 500) throw new Error('The sign-in service is unavailable. Check the Nhost function logs and server configuration.');
     throw new Error(`Telegram sign-in was rejected (HTTP ${response.status}). Close and reopen the Mini App to try again.`);
   }

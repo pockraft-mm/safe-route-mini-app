@@ -10,13 +10,25 @@ export default function telegramAuth(req: Request, res: Response) {
   const initData = String(req.body?.initData ?? '');
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const jwtSecret = getJwtSigningKey(process.env.NHOST_JWT_SECRET);
-  if (!botToken || !jwtSecret) return res.status(500).json({ error: 'Telegram auth is not configured.' });
+  const configurationErrors: string[] = [];
+  if (!botToken?.trim()) configurationErrors.push('BOT_TOKEN_MISSING');
+  if (!process.env.NHOST_JWT_SECRET?.trim()) configurationErrors.push('JWT_SECRET_MISSING');
+  else if (!jwtSecret) configurationErrors.push('JWT_CONFIG_UNSUPPORTED');
+  if (configurationErrors.length) {
+    // Record only issue codes, never credentials, initData, or the JWT configuration.
+    console.error('[SafeRoute auth] Invalid server configuration', { issues: configurationErrors });
+    return res.status(500).json({
+      error: 'Telegram auth is not configured.',
+      code: 'AUTH_CONFIG_INVALID',
+      issues: configurationErrors,
+    });
+  }
 
   const params = new URLSearchParams(initData);
   const receivedHash = params.get('hash') ?? '';
   params.delete('hash');
   const dataCheckString = [...params.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join('\n');
-  const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest();
+  const secretKey = createHmac('sha256', 'WebAppData').update(botToken!).digest();
   const calculatedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
   if (!receivedHash || receivedHash.length !== calculatedHash.length || !timingSafeEqual(Buffer.from(receivedHash), Buffer.from(calculatedHash))) return res.status(401).json({ error: 'Invalid Telegram init data.' });
 
@@ -37,10 +49,10 @@ export default function telegramAuth(req: Request, res: Response) {
 function base64Url(value: string | Buffer) { return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 
 function getJwtSigningKey(value?: string) {
-  if (!value) return '';
+  if (!value?.trim()) return '';
   try {
-    const config = JSON.parse(value) as { key?: string; type?: string };
-    return config.type === 'HS256' ? config.key ?? '' : '';
+    const config = JSON.parse(value) as { key?: string; type?: string } | null;
+    return config?.type === 'HS256' && typeof config.key === 'string' ? config.key : '';
   } catch {
     return value;
   }

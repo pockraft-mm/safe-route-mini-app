@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { handleCors } from '../lib/http.js';
+import { getJwtConfiguration, signJwt } from '../lib/jwt.js';
 
 type TelegramUser = { id: number; first_name?: string; last_name?: string; username?: string };
 
@@ -9,11 +10,11 @@ export default function telegramAuth(req: Request, res: Response) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const initData = String(req.body?.initData ?? '');
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const jwtSecret = getJwtSigningKey(process.env.NHOST_JWT_SECRET);
+  const jwtConfig = getJwtConfiguration(process.env.NHOST_JWT_SECRET);
   const configurationErrors: string[] = [];
   if (!botToken?.trim()) configurationErrors.push('BOT_TOKEN_MISSING');
   if (!process.env.NHOST_JWT_SECRET?.trim()) configurationErrors.push('JWT_SECRET_MISSING');
-  else if (!jwtSecret) configurationErrors.push('JWT_CONFIG_UNSUPPORTED');
+  else if (!jwtConfig) configurationErrors.push('JWT_CONFIG_UNSUPPORTED');
   if (configurationErrors.length) {
     // Record only issue codes, never credentials, initData, or the JWT configuration.
     console.error('[SafeRoute auth] Invalid server configuration', { issues: configurationErrors });
@@ -39,21 +40,6 @@ export default function telegramAuth(req: Request, res: Response) {
 
   const userId = `telegram:${user.id}`;
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'Telegram user';
-  const header = base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = base64Url(JSON.stringify({ sub: userId, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600, 'https://hasura.io/jwt/claims': { 'x-hasura-user-id': userId, 'x-hasura-default-role': 'user', 'x-hasura-allowed-roles': ['user'] } }));
-  const unsigned = `${header}.${payload}`;
-  const signature = base64Url(createHmac('sha256', jwtSecret).update(unsigned).digest());
-  return res.json({ token: `${unsigned}.${signature}`, user: { id: userId, telegramId: String(user.id), displayName } });
-}
-
-function base64Url(value: string | Buffer) { return Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-
-function getJwtSigningKey(value?: string) {
-  if (!value?.trim()) return '';
-  try {
-    const config = JSON.parse(value) as { key?: string; type?: string } | null;
-    return config?.type === 'HS256' && typeof config.key === 'string' ? config.key : '';
-  } catch {
-    return value;
-  }
+  const token = signJwt({ sub: userId, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600, 'https://hasura.io/jwt/claims': { 'x-hasura-user-id': userId, 'x-hasura-default-role': 'user', 'x-hasura-allowed-roles': ['user'] } }, jwtConfig!);
+  return res.json({ token, user: { id: userId, telegramId: String(user.id), displayName } });
 }

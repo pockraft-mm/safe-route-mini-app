@@ -38,7 +38,7 @@ export async function authenticateTelegram(): Promise<User> {
         const descriptions: Record<string, string> = {
           BOT_TOKEN_MISSING: 'TELEGRAM_BOT_TOKEN is missing from the Nhost function environment.',
           JWT_SECRET_MISSING: 'NHOST_JWT_SECRET is missing from the Nhost function environment.',
-          JWT_CONFIG_UNSUPPORTED: 'The Nhost JWT configuration is not supported by this sign-in service; it currently requires an HS256 signing key.',
+          JWT_CONFIG_UNSUPPORTED: 'The Nhost JWT configuration could not be loaded. Use an HS256 key or an RS256 signingKey containing a valid RSA private key.',
         };
         const messages = detail.issues.filter((issue): issue is string => typeof issue === 'string').map((issue) => descriptions[issue]).filter(Boolean);
         if (messages.length) throw new Error(messages.join(' '));

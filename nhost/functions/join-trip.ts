@@ -1,12 +1,12 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { handleCors } from '../lib/http.js';
+import { getJwtConfiguration, readJwtUserId } from '../lib/jwt.js';
 
 export default async function joinTrip(req: Request, res: Response) {
   if (handleCors(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
-  const userId = readUserId(token);
+  const userId = readJwtUserId(token, getJwtConfiguration(process.env.NHOST_JWT_SECRET));
   const code = String(req.body?.inviteCode ?? '').toUpperCase();
   if (!userId || !code) return res.status(401).json({ error: 'A valid session and invite code are required.' });
   const graphqlUrl = process.env.NHOST_GRAPHQL_URL ?? process.env.NHOST_HASURA_URL;
@@ -24,22 +24,3 @@ export default async function joinTrip(req: Request, res: Response) {
 }
 
 async function request<T = unknown>(url: string, secret: string, query: string, variables: Record<string, unknown>) { const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-hasura-admin-secret': secret }, body: JSON.stringify({ query, variables }) }); if (!response.ok) throw new Error('Nhost request failed.'); const body = await response.json() as { data: T; errors?: Array<{ message: string }> }; if (body.errors?.length) throw new Error(body.errors[0].message); return body.data; }
-function readUserId(token?: string) {
-  const signingKey = getJwtSigningKey(process.env.NHOST_JWT_SECRET);
-  if (!token || !signingKey) return '';
-  try {
-    const [header, payload, signature] = token.split('.');
-    if (!header || !payload || !signature) return '';
-    const expected = createHmac('sha256', signingKey).update(`${header}.${payload}`).digest('base64url');
-    if (expected.length !== signature.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) return '';
-    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { sub?: string; exp?: number };
-    return claims.exp && claims.exp < Date.now() / 1000 ? '' : claims.sub ?? '';
-  } catch { return ''; }
-}
-function getJwtSigningKey(value?: string) {
-  if (!value) return '';
-  try {
-    const config = JSON.parse(value) as { key?: string; type?: string };
-    return config.type === 'HS256' ? config.key ?? '' : '';
-  } catch { return value; }
-}

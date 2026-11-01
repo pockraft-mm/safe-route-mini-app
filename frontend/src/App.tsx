@@ -83,7 +83,7 @@ function App() {
     }, () => reject(new Error('Location permission was not granted.')), { enableHighAccuracy: true, timeout: 10000 })));
   }
 
-  if (!user) return <main className="shell"><div className="loading">Connecting to Telegram…</div></main>;
+  if (!user) return <main className="shell">{error ? <div className="alert error" role="alert">{error}</div> : <div className="loading">Connecting to Telegram…</div>}</main>;
   return <main className="shell">
     <header className="topbar"><div><span className="eyebrow">SAFEROUTE</span><h1>Stay connected.</h1></div><div className="avatar">{user.displayName.slice(0, 1).toUpperCase()}</div></header>
     <nav className="app-nav"><button className={!showHistory ? 'nav-active' : ''} onClick={() => setShowHistory(false)}>Current trip</button><button className={showHistory ? 'nav-active' : ''} onClick={() => { setShowHistory(true); setTrip(null); }}>History <span>{history.length}</span></button></nav>
